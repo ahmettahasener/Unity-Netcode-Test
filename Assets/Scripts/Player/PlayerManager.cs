@@ -1,34 +1,62 @@
+using Unity.Netcode;
 using UnityEngine;
 
-public class PlayerManager : MonoBehaviour
+public class PlayerManager : NetworkBehaviour
 {
-    [SerializeField] private float healt = 100;
+    [SerializeField] private int maxHealth = 4;
+    private NetworkVariable<int> currentHealth = new NetworkVariable<int>(4, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
-    void Start()
+    private Vector3 spawnPoint;
+
+    [SerializeField] private GameObject leftController;
+    [SerializeField] private GameObject rightController;
+    private void Start()
     {
-        
+        if (IsOwner)
+        {
+            spawnPoint = transform.position;
+        }
+
+        if (IsServer)
+        {
+            currentHealth.Value = maxHealth;
+        }
+
     }
 
-    private void OnTriggerEnter(Collider other)
+    [ServerRpc(RequireOwnership = false)]
+    public void TakeDamageServerRpc(int damage)
     {
-        if (other.CompareTag("Bullet"))
+        if (currentHealth.Value > 0)
         {
-            Debug.Log("Player hit");
-            TakeDamage();
+            currentHealth.Value -= damage;
+            Debug.Log($"Current Health: {currentHealth.Value}");
+
+            if (currentHealth.Value <= 0)
+            {
+                Debug.Log("Player died. Respawning...");
+                GetComponent<MeshRenderer>().enabled = false;
+                StartRespawnServerRpc();
+
+                //GetComponent<NetworkObject>().Despawn();
+            }
         }
     }
 
-    private void TakeDamage()
+    [ServerRpc(RequireOwnership = false)]
+    private void StartRespawnServerRpc()
     {
-        healt -= 25;
-        if(healt <= 0)
-        {
-            Dead();
-        }
+        Invoke(nameof(Respawn), 3f);
     }
 
-    private void Dead()
+    private void Respawn()
     {
-        Destroy(transform.parent.gameObject);//make player dead and respawn
+        if (IsServer)
+        {
+            Debug.Log("Respawning player...");
+            transform.position = spawnPoint;
+            currentHealth.Value = maxHealth;
+            GetComponent<MeshRenderer>().enabled = true;
+        }
     }
 }

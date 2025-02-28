@@ -1,3 +1,4 @@
+using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.XR.Interaction.Toolkit;
 
@@ -16,19 +17,27 @@ public class VR_Gun : XRGrabInteractable
     {
         base.OnHoverExited(args);
     }
-
-
-    //protected override void OnActivate(XRBaseInteractor interactor)
-    //{
-    //    base.OnActivate(interactor);
-    //    Shoot();
-    //}
-
     public void Shoot()
     {
         //Debug.Log("Shoot");
         GameObject bullet = Instantiate(bulletPrefab, muzzleTransform.position, muzzleTransform.rotation);
-        Rigidbody rb = bullet.GetComponent<Rigidbody>();
-        rb.velocity = muzzleTransform.forward * bulletSpeed;
+        NetworkObject networkBullet = bullet.GetComponent<NetworkObject>();
+        networkBullet.Spawn();
+
+        // Server’a fizik iþlemlerini yaptýr
+        ShootServerRpc(networkBullet.NetworkObjectId);
+    }
+
+    [ServerRpc(RequireOwnership = false)]
+    private void ShootServerRpc(ulong bulletId)
+    {
+        NetworkObject bullet = NetworkManager.Singleton.SpawnManager.SpawnedObjects[bulletId];
+
+        if (bullet != null)
+        {
+            Rigidbody rb = bullet.GetComponent<Rigidbody>();
+            rb.isKinematic = false;
+            rb.velocity = bullet.transform.forward * bulletSpeed;
+        }
     }
 }
